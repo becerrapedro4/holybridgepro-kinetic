@@ -1,0 +1,40 @@
+{
+  "port": 7333,
+  "host": "0.0.0.0",
+  "effect": "pop",
+  "stagger": 55,
+  "speed": 520,
+  "holyrics": {
+    "enabled": true,
+    "ip": "192.168.100.103",
+    "port": 80,
+    "intervalMs": 60,
+    "timeoutMs": 900,
+    "apiPort": "",
+    "apiToken": "",
+    "skipTypes": ["notice", "aviso"],
+    "format": {
+      "uppercase": false,
+      "singleLine": false,
+      "stripVersion": true
+    }
+  },
+  "upstreamWs": {
+    "enabled": false,
+    "url": "ws://127.0.0.1:8080",
+    "textField": "text",
+    "titleField": "title",
+    "progressField": "progress"
+  },
+  "poller": {
+    "enabled": false,
+    "url": "http://127.0.0.1:8080/api/text",
+    "method": "POST",
+    "headers": {},
+    "body": {},
+    "intervalMs": 100,
+    "textField": "data.text",
+    "titleField": "data.title",
+    "progressField": "data.progress"
+  }
+}

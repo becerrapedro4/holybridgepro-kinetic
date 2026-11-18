@@ -1,0 +1,278 @@
+/* ---------------------------------------------------------------
+   Kinetic Lyrics — overlay para OBS / vMix (fondo transparente)
+   Regla de oro: animar solo transform/opacity (compositor GPU)
+   para que el push de texto se vea en el mismo frame.
+----------------------------------------------------------------- */
+
+:root {
+  --fx-fs: 64px;
+  --fx-speed: 520ms;
+  --fx-stagger: 55ms;
+  --fx-ease: cubic-bezier(0.22, 1, 0.28, 1);
+  --fx-color: #ffffff;
+  --fx-highlight: #ffd23f;
+  --fx-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --fx-weight: 800;
+  --fx-align: center;
+  --fx-lh: 1.14;
+  --fx-outline: 0px;
+  --fx-outline-color: #000000;
+  --fx-shadow: 0.04em 0.04em 0.14em rgba(0, 0, 0, 0.55);
+  --fx-maxw: 92vw;
+  --fx-fill: 0.25;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5vh 4vw;
+  overflow: hidden;
+}
+
+.text {
+  width: 100%;
+  max-width: var(--fx-maxw);
+  margin: 0;
+  font-family: var(--fx-family);
+  font-weight: var(--fx-weight);
+  font-size: var(--fx-fs);
+  line-height: var(--fx-lh);
+  letter-spacing: -0.01em;
+  text-align: var(--fx-align);
+  color: var(--fx-color);
+  text-wrap: balance;
+  text-shadow: var(--fx-shadow);
+  perspective: 900px;
+  contain: layout style;
+  -webkit-font-smoothing: antialiased;
+}
+
+.text.uppercase { text-transform: uppercase; }
+
+.line { display: block; }
+.line + .line { margin-top: 0.08em; }
+
+.w,
+.c {
+  display: inline-block;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.w { margin-right: 0.26em; }
+.w:last-child { margin-right: 0; }
+.c { margin-right: 0; }
+
+.w { -webkit-text-stroke: var(--fx-outline) var(--fx-outline-color); }
+
+/* Palabra resaltada: por lista del panel o escribiendo *así* en la letra.
+   El modo se elige con .hlm-* en el contenedor (.text). */
+.w.hl {
+  color: var(--fx-highlight);
+  text-shadow: 0 0 0.14em rgba(255, 210, 63, 0.5), var(--fx-shadow);
+}
+
+.hlm-color .w.hl { color: var(--fx-highlight); }
+
+.hlm-font .w.hl {
+  font-family: var(--fx-hl-family, cursive);
+  font-weight: 700;
+}
+
+.hlm-italic .w.hl {
+  font-style: italic;
+  font-weight: 900;
+  color: var(--fx-highlight);
+}
+
+.hlm-underline .w.hl {
+  text-decoration: underline;
+  text-decoration-color: var(--fx-highlight);
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.14em;
+}
+
+.hlm-box .w.hl {
+  background: var(--fx-highlight);
+  color: #10141a;
+  padding: 0.02em 0.16em 0.08em;
+  border-radius: 0.14em;
+  text-shadow: none;
+}
+
+.hlm-glow .w.hl {
+  color: var(--fx-highlight);
+  text-shadow: 0 0 0.5em var(--fx-highlight), 0 0 0.9em var(--fx-highlight);
+}
+
+/* Ninguno: el resaltado no se pinta (solo queda marcado en el texto) */
+.hlm-none .w.hl { color: inherit; text-shadow: var(--fx-shadow); }
+
+/* Karaoke opcional (progress del bridge) */
+.w { transition: color 90ms linear; }
+.w.on { color: var(--fx-highlight); }
+
+/* ---------------------------------------------------------------
+   Efectos de entrada (clase en .text)
+   overlay.js inyecta el delay por palabra.
+----------------------------------------------------------------- */
+
+.fx-pop .w { animation: fx-pop var(--fx-speed) var(--fx-ease) both; }
+@keyframes fx-pop {
+  0%   { opacity: 0; transform: scale(0.55) translateZ(0); }
+  60%  { opacity: 1; transform: scale(1.06) translateZ(0); }
+  100% { opacity: 1; transform: scale(1) translateZ(0); }
+}
+
+.fx-rise .w { animation: fx-rise var(--fx-speed) var(--fx-ease) both; }
+@keyframes fx-rise {
+  0%   { opacity: 0; transform: translate3d(0, 0.42em, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.fx-drop .w { animation: fx-drop var(--fx-speed) var(--fx-ease) both; }
+@keyframes fx-drop {
+  0%   { opacity: 0; transform: translate3d(0, -0.42em, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.fx-slide .w { animation: fx-slide var(--fx-speed) var(--fx-ease) both; }
+@keyframes fx-slide {
+  0%   { opacity: 0; transform: translate3d(-0.5em, 0, 0) skewX(-9deg); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) skewX(0); }
+}
+
+.fx-blur .w { animation: fx-blur calc(var(--fx-speed) + 120ms) var(--fx-ease) both; }
+@keyframes fx-blur {
+  0%   { opacity: 0; filter: blur(16px); transform: scale(1.09) translateZ(0); }
+  100% { opacity: 1; filter: blur(0); transform: scale(1) translateZ(0); }
+}
+
+.fx-flip .w {
+  animation: fx-flip var(--fx-speed) var(--fx-ease) both;
+  transform-origin: 50% 100%;
+}
+@keyframes fx-flip {
+  0%   { opacity: 0; transform: rotateX(-82deg) translateZ(0); }
+  100% { opacity: 1; transform: rotateX(0deg) translateZ(0); }
+}
+
+.fx-glitch .w { animation: fx-glitch var(--fx-speed) steps(6, end) both; }
+@keyframes fx-glitch {
+  0%   { opacity: 0; transform: translate3d(-0.14em, 0, 0) skewX(18deg); }
+  20%  { opacity: 1; transform: translate3d(0.12em, -0.05em, 0) skewX(-12deg); }
+  40%  { transform: translate3d(-0.06em, 0.04em, 0); }
+  60%  { transform: translate3d(0.04em, -0.02em, 0); }
+  80%  { transform: translate3d(-0.02em, 0, 0); }
+  100% { opacity: 1; transform: none; }
+}
+
+.fx-wave .w { animation: fx-wave calc(var(--fx-speed) + 160ms) var(--fx-ease) both; }
+@keyframes fx-wave {
+  0%   { opacity: 0; transform: translate3d(0, 0.5em, 0) rotate(5deg); }
+  55%  { opacity: 1; transform: translate3d(0, -0.08em, 0) rotate(-2deg); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0); }
+}
+
+/* Typewriter: por caracter, corte seco */
+.fx-typewriter .c { animation: fx-type var(--fx-speed) steps(1, end) both; }
+@keyframes fx-type {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* ------------------------- efectos "movidos" ------------------------- */
+
+/* Rebote con sobrepaso marcado */
+.fx-bounce .w { animation: fx-bounce calc(var(--fx-speed) + 180ms) cubic-bezier(0.28, 1.6, 0.42, 1) both; }
+@keyframes fx-bounce {
+  0%   { opacity: 0; transform: translate3d(0, 0.7em, 0) scale(0.7); }
+  55%  { opacity: 1; transform: translate3d(0, -0.12em, 0) scale(1.08); }
+  78%  { transform: translate3d(0, 0.04em, 0) scale(0.98); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+/* Giro completo al entrar */
+.fx-spin .w {
+  animation: fx-spin calc(var(--fx-speed) + 200ms) var(--fx-ease) both;
+  transform-origin: 50% 55%;
+}
+@keyframes fx-spin {
+  0%   { opacity: 0; transform: rotate(-210deg) scale(0.2); }
+  70%  { opacity: 1; transform: rotate(12deg) scale(1.04); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+
+/* Balanceo de columpio */
+.fx-swing .w {
+  animation: fx-swing calc(var(--fx-speed) + 220ms) var(--fx-ease) both;
+  transform-origin: 50% -20%;
+}
+@keyframes fx-swing {
+  0%   { opacity: 0; transform: rotate(-26deg) translate3d(-0.1em, -0.2em, 0); }
+  60%  { opacity: 1; transform: rotate(7deg); }
+  82%  { transform: rotate(-3deg); }
+  100% { opacity: 1; transform: rotate(0deg); }
+}
+
+/* Golpe: entra grande y se asienta */
+.fx-punch .w { animation: fx-punch calc(var(--fx-speed) + 60ms) cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes fx-punch {
+  0%   { opacity: 0; transform: scale(1.75) translateZ(0); filter: blur(10px); }
+  100% { opacity: 1; transform: scale(1) translateZ(0); filter: blur(0); }
+}
+
+/* Estirado vertical elástico */
+.fx-stretch .w {
+  animation: fx-stretch calc(var(--fx-speed) + 220ms) cubic-bezier(0.3, 1.5, 0.4, 1) both;
+  transform-origin: 50% 100%;
+}
+@keyframes fx-stretch {
+  0%   { opacity: 0; transform: scaleY(0.15) scaleX(1.1); }
+  60%  { opacity: 1; transform: scaleY(1.06) scaleX(0.98); }
+  100% { opacity: 1; transform: scaleY(1) scaleX(1); }
+}
+
+/* Deriva lateral con inclinación */
+.fx-drift .w { animation: fx-drift calc(var(--fx-speed) + 120ms) var(--fx-ease) both; }
+@keyframes fx-drift {
+  0%   { opacity: 0; transform: translate3d(-0.7em, 0.2em, 0) rotate(-9deg); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0); }
+}
+
+/* Fundido: sólo opacidad, sin movimiento */
+.fx-fade .w { animation: fx-fade calc(var(--fx-speed) + 160ms) ease both; }
+@keyframes fx-fade {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Barrido tipo cortina (clip-path) */
+.fx-reveal .w { animation: fx-reveal calc(var(--fx-speed) + 140ms) var(--fx-ease) both; }
+@keyframes fx-reveal {
+  0%   { opacity: 1; clip-path: inset(0 100% 0 0); transform: translate3d(0.12em, 0, 0); }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); }
+}
+
+.fx-none .w,
+.fx-none .c { animation: none; }
+
+.text.is-out { opacity: 0; transition: opacity 90ms linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  .w, .c { animation-duration: 1ms !important; animation-delay: 0ms !important; }
+}

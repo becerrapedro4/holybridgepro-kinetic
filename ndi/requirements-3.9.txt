@@ -1,0 +1,5 @@
+# Versiones verificadas con Python 3.9.13 (Windows x64)
+# Instalar con:  py -3.9 -m pip install -r ndi/requirements-3.9.txt
+pillow==11.3.0
+numpy==2.0.2
+ndi-python==5.1.1.1

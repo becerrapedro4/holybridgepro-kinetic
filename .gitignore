@@ -1,0 +1,17 @@
+# Dependencias y temporales
+node_modules/
+__pycache__/
+*.log
+*.spec.bak
+
+# Paquetes generados localmente (superan el límite de 100 MB por archivo de GitHub)
+portable/
+dist/
+*.zip
+
+# Versiones viejas del ejecutable
+HolyBridgeProv6.4.3.exe
+HolyBridgeProv6.5.exe
+HolyBridgeProv6.5.1.exe
+HolyBridgeProv6.5.viejo.exe
+HolyBridgeProv6.5.2.exe

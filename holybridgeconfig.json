@@ -1,0 +1,15 @@
+{
+  "vmix_extras": "[]",
+  "reso_extras": "[]",
+  "obs_extras": "[]",
+  "holyrics_ip": "192.168.100.103",
+  "reso_enabled": "False",
+  "reso_multi": "False",
+  "vmix_ip": "192.168.100.98",
+  "vmix_input_letras": "BIBLIA",
+  "vmix_field_letras": "Message",
+  "vmix_field_biblia": "Message",
+  "ndi_enabled": "1",
+  "auto_start": "1",
+  "texto_sin_version": "0"
+}
