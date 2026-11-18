@@ -47,6 +47,19 @@ const SIZES = [
   { value: '120', label: '120 px · grande' },
   { value: '150', label: '150 px · muy grande' },
   { value: '190', label: '190 px · máximo' },
+  { value: '240', label: '240 px · extra grande' },
+  { value: '300', label: '300 px · gigante' },
+];
+
+/* Lienzo de la salida web. El NDI emite 1920×1080: ese es el valor por
+   defecto, así el overlay y el NDI muestran la misma composición y el texto
+   deja de cambiar de tamaño según el navegador. */
+const CANVASES = [
+  { value: '1920x1080', label: '1920×1080 · igual que NDI' },
+  { value: '1280x720', label: '1280×720' },
+  { value: '1080x1920', label: '1080×1920 · vertical' },
+  { value: '3840x2160', label: '3840×2160 · 4K' },
+  { value: '', label: 'Ventana (lo que mida el navegador)' },
 ];
 
 const HL_MODES = {
@@ -70,6 +83,7 @@ const urlInput = document.getElementById('url');
 const copyBtn = document.getElementById('copy');
 const fontSelect = document.getElementById('font');
 const sizeSelect = document.getElementById('size');
+const canvasSelect = document.getElementById('canvas');
 const caseSelect = document.getElementById('case');
 const hlModeSelect = document.getElementById('hlmode');
 const hlFontSelect = document.getElementById('hlfont');
@@ -86,6 +100,11 @@ const state = {
   effect: params.get('effect') || stored('effect', 'pop'),
   font: params.get('font') || stored('font', 'inter'),
   size: params.get('size') !== null ? params.get('size') : stored('size', ''),
+  canvas: (() => {
+    const w = Number(params.get('w'));
+    const h = Number(params.get('h'));
+    return w > 0 && h > 0 ? `${w}x${h}` : stored('canvas', '1920x1080');
+  })(),
   case: params.get('case') || stored('case', 'asis'),
   hlmode: params.get('hlmode') || stored('hlmode', 'color'),
   hlfont: params.get('hlfont') || stored('hlfont', 'pacifico'),
@@ -99,6 +118,7 @@ if (!FONTS[state.font]) state.font = 'inter';
 if (!FONTS[state.hlfont]) state.hlfont = 'pacifico';
 if (!HL_MODES[state.hlmode]) state.hlmode = 'color';
 if (!CASES.includes(state.case)) state.case = 'asis';
+if (!CANVASES.some((c) => c.value === state.canvas)) state.canvas = '1920x1080';
 
 function normWord(word) {
   return String(word)
@@ -237,6 +257,12 @@ function fontOptions() {
     option.textContent = size.label;
     sizeSelect.appendChild(option);
   }
+  for (const canvas of CANVASES) {
+    const option = document.createElement('option');
+    option.value = canvas.value;
+    option.textContent = canvas.label;
+    canvasSelect.appendChild(option);
+  }
 }
 
 async function loadInstalledFonts() {
@@ -269,6 +295,11 @@ function buildUrl() {
   query.set('effect', state.effect);
   if (state.font !== 'inter') query.set('font', state.font);
   if (state.size) query.set('size', state.size);
+  if (state.canvas) {
+    const [ancho, alto] = state.canvas.split('x');
+    query.set('w', ancho);
+    query.set('h', alto);
+  }
   if (state.case !== 'asis') query.set('case', state.case);
   if (state.hlmode !== 'color') query.set('hlmode', state.hlmode);
   if (state.hlmode === 'font' && state.hlfont !== 'pacifico') query.set('hlfont', state.hlfont);
@@ -300,6 +331,7 @@ function applyVisualState() {
   urlInput.value = buildUrl();
   fontSelect.value = state.font;
   sizeSelect.value = state.size;
+  canvasSelect.value = state.canvas;
   caseSelect.value = state.case;
   hlModeSelect.value = state.hlmode;
   hlFontSelect.value = state.hlfont;
@@ -309,6 +341,7 @@ function applyVisualState() {
   localStorage.setItem('kinetic-effect', state.effect);
   localStorage.setItem('kinetic-font', state.font);
   localStorage.setItem('kinetic-size', state.size);
+  localStorage.setItem('kinetic-canvas', state.canvas);
   localStorage.setItem('kinetic-case', state.case);
   localStorage.setItem('kinetic-hlmode', state.hlmode);
   localStorage.setItem('kinetic-hlfont', state.hlfont);
@@ -353,6 +386,7 @@ function select(patch) {
 
 fontSelect.addEventListener('change', () => select({ font: fontSelect.value }));
 sizeSelect.addEventListener('change', () => select({ size: sizeSelect.value }));
+canvasSelect.addEventListener('change', () => select({ canvas: canvasSelect.value }));
 caseSelect.addEventListener('change', () => select({ case: caseSelect.value }));
 hlModeSelect.addEventListener('change', () => select({ hlmode: hlModeSelect.value }));
 hlFontSelect.addEventListener('change', () => select({ hlfont: hlFontSelect.value }));

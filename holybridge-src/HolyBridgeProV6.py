@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Holyrics Bridge Pro (v6.5.5) — puente entre Holyrics y vMix / Resolume / OBS
+# Holyrics Bridge Pro (v6.5.6) — puente entre Holyrics y vMix / Resolume / OBS
 import sys
 import os
 import re
@@ -3129,7 +3129,7 @@ def main_page():
         # ── FOOTER DE LAS SECCIONES ──
         with ui.row().classes('w-full justify-center items-center gap-2').style('margin-top: 4px; padding: 12px 0 6px 0; border-top: 1px solid rgba(255,255,255,0.08);'):
             ui.label("HolyBridge Pro").style('font-family: Rajdhani; font-size:12px; letter-spacing:2px; color: rgba(255,255,255,0.55);')
-            ui.label("v6.5.5").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
+            ui.label("v6.5.6").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
 
     # ─── NAVEGACIÓN ENTRE PÁGINAS ────────────────────────────────────────
     def _mostrar_pagina():

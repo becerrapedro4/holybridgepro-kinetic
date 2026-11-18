@@ -42,6 +42,19 @@ body {
   overflow: hidden;
 }
 
+/* Lienzo fijo: se dibuja a 1920×1080 (igual que el NDI) y overlay.js lo
+   escala para que entre en la ventana. Al estar escalado, los márgenes van en
+   % del lienzo y no en vw/vh (que dependen del navegador, no del lienzo). */
+.stage.canvas-fijo {
+  inset: auto;
+  left: 50%;
+  top: 50%;
+  /* El relleno lo pone overlay.js en px del lienzo. */
+  transform-origin: 50% 50%;
+}
+
+.stage.canvas-fijo .text { max-width: 100%; }
+
 .text {
   width: 100%;
   max-width: var(--fx-maxw);

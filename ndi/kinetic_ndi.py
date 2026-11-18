@@ -345,16 +345,30 @@ class KineticNDI:
         ancho_util = int(self.width * 0.92)
         alto_util = int(self.height * 0.90)
         tamano = self._tamano()
-        lineas = self._repartir(grupos, tamano, ancho_util)
-        for _ in range(40):
-            if tamano <= 20:
+        # Se respetan los renglones de Holyrics: si la frase no entra, se achica
+        # la letra en vez de partirla en más líneas por cuenta propia.
+        lineas = grupos
+        for _ in range(60):
+            if tamano <= 24:
                 break
-            alto = len(lineas) * tamano * 1.18
+            alto = len(lineas) * tamano * 1.45
             ancho = max((self._ancho_linea(l, tamano) for l in lineas), default=0)
             if ancho <= ancho_util and alto <= alto_util:
                 break
-            tamano = max(20, int(tamano * 0.93))
+            tamano = max(24, int(tamano * 0.94))
+        # Último recurso: un renglón larguísimo que ni al mínimo entra. Ahí sí se
+        # permite cortar, para que nada se salga del cuadro.
+        if max((self._ancho_linea(l, tamano) for l in lineas), default=0) > ancho_util:
             lineas = self._repartir(grupos, tamano, ancho_util)
+            for _ in range(60):
+                if tamano <= 20:
+                    break
+                alto = len(lineas) * tamano * 1.45
+                ancho = max((self._ancho_linea(l, tamano) for l in lineas), default=0)
+                if ancho <= ancho_util and alto <= alto_util:
+                    break
+                tamano = max(20, int(tamano * 0.94))
+                lineas = self._repartir(grupos, tamano, ancho_util)
         self._tamano_usado = tamano
 
         # 3) imágenes y acomodo (cada renglón centrado, el bloque centrado)
@@ -426,10 +440,15 @@ class KineticNDI:
         pad = int(tamano * 0.16)
         bbox = fuente.getbbox(texto)
         w = max(1, bbox[2] - bbox[0] + pad * 2)
-        h = max(1, bbox[3] - bbox[1] + pad * 2)
+        # Alto FIJO para todas las palabras y línea base comuna: antes cada
+        # palabra se recortaba a su propio bbox y las que tenían tilde o cola
+        # quedaban más arriba que las demás en el NDI.
+        h = max(1, int(tamano * 1.45))
 
         img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-        pos = (pad - bbox[0], pad - bbox[1])
+        asc, _desc = fuente.getmetrics()
+        base_y = int(h * 0.78)
+        pos = (pad - bbox[0], base_y - asc)
 
         if hl and modo == 'glow':
             halo = Image.new('RGBA', (w, h), (0, 0, 0, 0))
@@ -440,18 +459,18 @@ class KineticNDI:
         draw = ImageDraw.Draw(img)
 
         if hl and modo == 'box':
-            caja = [max(0, bbox[0] - int(tamano * 0.18)) + pad - bbox[0],
-                    max(0, bbox[1] - int(tamano * 0.10)) + pad - bbox[1],
-                    bbox[2] + int(tamano * 0.18) + pad - bbox[0],
-                    bbox[3] + int(tamano * 0.10) + pad - bbox[1]]
+            caja = [max(0, pos[0] + bbox[0] - int(tamano * 0.18)),
+                    max(0, pos[1] + bbox[1] - int(tamano * 0.10)),
+                    pos[0] + bbox[2] + int(tamano * 0.18),
+                    pos[1] + bbox[3] + int(tamano * 0.10)]
             draw.rounded_rectangle(caja, radius=int(tamano * 0.14), fill=hl_color)
             draw.text(pos, texto, font=fuente, fill=(16, 20, 26, 255))
         else:
             draw.text(pos, texto, font=fuente, fill=pintar)
 
         if hl and modo == 'underline':
-            y = bbox[3] + pad - bbox[1] + int(tamano * 0.06)
-            draw.line([(pad - bbox[0], y), (pad - bbox[0] + (bbox[2] - bbox[0]), y)],
+            y = pos[1] + bbox[3] + int(tamano * 0.06)
+            draw.line([(pos[0] + bbox[0], y), (pos[0] + bbox[2], y)],
                       fill=hl_color, width=max(2, tamano // 22))
 
         return img
@@ -466,7 +485,9 @@ class KineticNDI:
 
         lineas = [l for l in lineas if l]
         espacio = int(tamano * 0.26)
-        alto_linea = max(1, int(tamano * 1.18))
+        # Todas las palabras comparten alto de imagen, así que centrarlas en la
+        # línea deja todas sobre la misma línea base.
+        alto_linea = max([int(tamano * 1.18)] + [p['alto'] for l in lineas for p in l])
         total = len(lineas) * alto_linea
         y = (self.height - total) // 2
 

@@ -15,6 +15,38 @@ const els = {
   text: document.getElementById('text'),
 };
 
+/**
+ * Lienzo fijo (por defecto 1920×1080, el mismo del NDI).
+ *
+ * El escenario se dibuja siempre a ese tamaño y se escala con transform para
+ * entrar en la ventana: así la composición y el tamaño de letra no dependen de
+ * cuánto mida el navegador (OBS 1080p, celular o el panel embebido) y queda
+ * idéntica al NDI. Sin parámetros, se comporta como antes (llena la ventana).
+ */
+const CANVAS = (() => {
+  const p = new URLSearchParams(location.search);
+  const w = Math.round(Number(p.get('w')));
+  const h = Math.round(Number(p.get('h')));
+  return w > 0 && h > 0 ? { w, h } : null;
+})();
+
+function escalarLienzo() {
+  if (!CANVAS) return;
+  const k = Math.min(window.innerWidth / CANVAS.w, window.innerHeight / CANVAS.h) || 1;
+  els.stage.style.transform = `translate(-50%, -50%) scale(${k})`;
+}
+
+function aplicarLienzo() {
+  if (!CANVAS) return;
+  els.stage.classList.add('canvas-fijo');
+  els.stage.style.width = `${CANVAS.w}px`;
+  els.stage.style.height = `${CANVAS.h}px`;
+  // Márgenes en px del lienzo (un % acá se resolvería contra la ventana, no
+  // contra el lienzo, porque el escenario está posicionado en absoluto).
+  els.stage.style.padding = `${Math.round(CANVAS.h * 0.05)}px ${Math.round(CANVAS.w * 0.06)}px`;
+  escalarLienzo();
+}
+
 function rerender() {
   if (!view.text) return;
   const { fragment, wordNodes } = tokenize(view.text);
@@ -242,6 +274,9 @@ function tokenize(text, reuse) {
   for (const lineText of lines) {
     const line = document.createElement('span');
     line.className = 'line';
+    // Con lienzo fijo y tamaño automático cada renglón va entero, como lo manda
+    // Holyrics: el ancho se resuelve achicando la letra, no cortando la línea.
+    if (CANVAS && !view.style.size) line.style.whiteSpace = 'nowrap';
     const words = splitWords(lineText);
 
     if (!words.length) {
@@ -367,9 +402,35 @@ function fitsAt(size, stageW, stageH) {
  */
 function fit() {
   const explicit = view.style.size;
-  const stageH = els.stage.clientHeight - 24;
-  const stageW = els.stage.clientWidth - 24;
+  // El relleno del escenario ya es el margen: descontarlo evita que el texto
+  // se mida contra un área más grande de la que realmente tiene.
+  const estilo = getComputedStyle(els.stage);
+  const padW = (parseFloat(estilo.paddingLeft) || 0) + (parseFloat(estilo.paddingRight) || 0);
+  const padH = (parseFloat(estilo.paddingTop) || 0) + (parseFloat(estilo.paddingBottom) || 0);
+  const stageH = els.stage.clientHeight - padH;
+  const stageW = els.stage.clientWidth - padW;
   if (stageH <= 0 || stageW <= 0) return;
+
+  // Con lienzo fijo se respetan los renglones de Holyrics (sin cortes extra) y
+  // el tamaño sale de una sola medición: el mayor que entre a lo ancho Y a lo
+  // alto. Así el texto ocupa todo el ancho disponible y no salta de tamaño por
+  // renglón dentro de la misma frase.
+  if (!explicit && CANVAS) {
+    const ref = Math.max(24, Math.round(CANVAS.h * 0.13));
+    els.text.style.setProperty('--fx-fs', `${ref}px`);
+    const alto = els.text.scrollHeight || 1;
+    const ancho = els.text.scrollWidth || 1;
+    let size = Math.floor(ref * Math.min(stageH / alto, stageW / (ancho + 1)));
+    // Tope: ni una palabra suelta se vuelve gigante.
+    size = Math.max(10, Math.min(size, Math.round(CANVAS.h * 0.6)));
+    els.text.style.setProperty('--fx-fs', `${size}px`);
+    for (let i = 0; i < 3; i += 1) {
+      if ((els.text.scrollHeight <= stageH && els.text.scrollWidth <= stageW + 1) || size <= 10) break;
+      size = Math.max(10, Math.round(size * 0.96));
+      els.text.style.setProperty('--fx-fs', `${size}px`);
+    }
+    return;
+  }
 
   // Tope de altura: llena el cuadro sin que una sola palabra quede gigante.
   const budgetH = explicit ? stageH : Math.round(stageH * 0.75);
@@ -460,6 +521,7 @@ async function loadInstalledFonts() {
   }
 }
 
+aplicarLienzo();
 applyStyle({});
 connect();
 loadInstalledFonts().then(() => {
@@ -472,9 +534,24 @@ const scheduleFit = () => {
   clearTimeout(fitTimer);
   fitTimer = setTimeout(fit, 60);
 };
-window.addEventListener('resize', scheduleFit);
+window.addEventListener('resize', () => {
+  escalarLienzo();
+  scheduleFit();
+});
+
+// En vMix/OBS el navegador interno cambia de tamaño después de cargar la página
+// (y a veces sin disparar `resize`): sin esto el lienzo quedaba escalado a un
+// tamaño viejo y el texto se veía chiquito en una esquina.
+requestAnimationFrame(escalarLienzo);
+setTimeout(escalarLienzo, 250);
+setTimeout(escalarLienzo, 1200);
+document.addEventListener('visibilitychange', escalarLienzo);
 if (typeof ResizeObserver === 'function') {
   new ResizeObserver(scheduleFit).observe(els.stage);
+  new ResizeObserver(() => {
+    escalarLienzo();
+    scheduleFit();
+  }).observe(document.documentElement);
 }
 if (document.fonts && document.fonts.ready) {
   // Solo reajustar: re-tokenizar acá volvía a animar la frase ya visible.
