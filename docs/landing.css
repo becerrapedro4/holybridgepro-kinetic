@@ -683,6 +683,17 @@ main, header, footer { position: relative; z-index: 1; }
   background: rgba(27, 143, 87, 0.12);
 }
 
+/* Capturas del panel: una grande y la del celular al costado */
+.panel-shots {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+.panel-shots .shot { margin: 0; }
+.panel-shots .phone img { width: 100%; height: auto; }
+
 /* ------------------------------------------------------------- FEATURES */
 
 .feature-grid {
@@ -790,6 +801,12 @@ main, header, footer { position: relative; z-index: 1; }
   .nav { justify-content: space-between; }
   .hero-stage,
   .two-col { grid-template-columns: 1fr; }
+  .panel-shots { grid-template-columns: minmax(0, 1fr) 220px; }
+}
+
+@media (max-width: 640px) {
+  .panel-shots { grid-template-columns: 1fr; }
+  .panel-shots .phone { max-width: 320px; margin: 0 auto; }
 }
 
 @media (max-width: 520px) {
