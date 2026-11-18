@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Holyrics Bridge Pro (v6.5.3) — puente entre Holyrics y vMix / Resolume / OBS
+# Holyrics Bridge Pro (v6.5.4) — puente entre Holyrics y vMix / Resolume / OBS
 import sys
 import os
 import re
@@ -9,6 +9,7 @@ import unicodedata
 import ipaddress
 import concurrent.futures
 import threading
+import atexit
 import time
 import html
 import json
@@ -666,6 +667,31 @@ def asegurar_bridge():
                          + str(candidatos[0]) + " esté ocupado por otro programa)")
         print("⚠️ Letras cinéticas: " + _bridge_error)
         return None
+
+
+def detener_bridge():
+    """Cierra el bridge, pero SÓLO si lo arrancó esta GUI.
+
+    Si el bridge ya estaba corriendo (lo abrió el .vbs, o el usuario) queda
+    vivo como antes: no nos metemos con procesos ajenos.
+    """
+    global _bridge_proceso
+    proc, _bridge_proceso = _bridge_proceso, None
+    if proc is None:
+        return
+    try:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+        print("⏹  Letras cinéticas: bridge detenido (lo había arrancado la GUI)")
+    except Exception:
+        pass
+
+
+atexit.register(detener_bridge)
 
 
 @app.middleware("http")
@@ -2976,7 +3002,7 @@ def main_page():
         # ── FOOTER DE LAS SECCIONES ──
         with ui.row().classes('w-full justify-center items-center gap-2').style('margin-top: 4px; padding: 12px 0 6px 0; border-top: 1px solid rgba(255,255,255,0.08);'):
             ui.label("HolyBridge Pro").style('font-family: Rajdhani; font-size:12px; letter-spacing:2px; color: rgba(255,255,255,0.55);')
-            ui.label("v6.5.3").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
+            ui.label("v6.5.4").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
 
     # ─── NAVEGACIÓN ENTRE PÁGINAS ────────────────────────────────────────
     def _mostrar_pagina():
@@ -3304,6 +3330,10 @@ def tray_exit(icon, item):
     guardar_desde_ui()
     try:
         ndi_detener()
+    except Exception:
+        pass
+    try:
+        detener_bridge()
     except Exception:
         pass
     try:
