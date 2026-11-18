@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HolyBridge Pro">
+  <rect x="2" y="2" width="508" height="508" rx="110" fill="#0f151d" stroke="#2b3746" stroke-width="6"/>
+  <rect x="128" y="128" width="256" height="32" rx="16" fill="#ffd23f"/>
+  <rect x="128" y="204" width="205" height="32" rx="16" fill="#e8edf5"/>
+  <rect x="128" y="280" width="154" height="32" rx="16" fill="#57c98a"/>
+</svg>
