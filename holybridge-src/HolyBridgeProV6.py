@@ -3,6 +3,7 @@
 import sys
 import os
 import re
+import shutil
 import functools
 import unicodedata
 import ipaddress
@@ -542,6 +543,9 @@ KINETIC_URL = f"http://{_ip_local()}:{KINETIC_PORT}/config"
 # Sirviendo el bridge por el mismo puerto de la GUI, el panel queda embebido en
 # la misma página y funciona desde cualquier dispositivo sin abrir nada más.
 _BRIDGE_BASE = f"http://127.0.0.1:{KINETIC_PORT}"
+_bridge_proceso = None
+_bridge_error = ""
+_bridge_candado = threading.Lock()
 _CINETICA_CAMINOS = {
     "/config", "/config.html", "/config.js", "/config.css",
     "/overlay", "/overlay.js", "/overlay.css",
@@ -555,6 +559,115 @@ def _es_cinetica(ruta: str) -> bool:
     return ruta in _CINETICA_CAMINOS or ruta.startswith("/fonts/")
 
 
+def _bridge_responde(puerto, timeout=0.6):
+    try:
+        return requests.get(f"http://127.0.0.1:{puerto}/api/state", timeout=timeout).status_code == 200
+    except Exception:
+        return False
+
+
+def _puerto_bridge_config():
+    """Puerto que declara config.json (el mismo que usa server.js)."""
+    for base in (_app_dir(), os.getcwd()):
+        try:
+            with open(os.path.join(base, "config.json"), encoding="utf-8") as f:
+                p = int(json.load(f).get("port") or 0)
+            if 0 < p < 65536:
+                return p
+        except Exception:
+            pass
+    return None
+
+
+def _puerto_bridge_env():
+    for clave in ("KINETIC_PORT", "BRIDGE_PORT"):
+        try:
+            p = int(os.environ.get(clave) or 0)
+            if 0 < p < 65536:
+                return p
+        except Exception:
+            pass
+    return None
+
+
+def _buscar_archivo(*partes):
+    for base in (_app_dir(), os.getcwd()):
+        ruta = os.path.join(base, *partes)
+        if os.path.isfile(ruta):
+            return ruta
+    return None
+
+
+def _usar_puerto_bridge(puerto):
+    global KINETIC_PORT, KINETIC_URL, _BRIDGE_BASE
+    KINETIC_PORT = puerto
+    _BRIDGE_BASE = f"http://127.0.0.1:{puerto}"
+    KINETIC_URL = f"http://{_ip_local()}:{puerto}/config"
+
+
+def asegurar_bridge():
+    """Deja el bridge de letras escuchando y devuelve su puerto (o None).
+
+    Antes el bridge sólo arrancaba desde "Iniciar HolyBridge.vbs". Si se abría
+    el .exe directo (o el .vbs no estaba) el panel quedaba en 503 y NDI sin
+    texto. Ahora se busca en 7333, después en config.json y, si no hay, se
+    levanta con el node.exe que viene en runtime\\
+    """
+    global _bridge_proceso, _bridge_error
+    with _bridge_candado:
+        candidatos = []
+        for p in (_puerto_bridge_env(), _puerto_bridge_config(), KINETIC_PORT, 7333):
+            if p and p not in candidatos:
+                candidatos.append(p)
+        for puerto in candidatos:
+            if _bridge_responde(puerto):
+                _usar_puerto_bridge(puerto)
+                _bridge_error = ""
+                return puerto
+
+        node = _buscar_archivo("runtime", "node.exe") or shutil.which("node")
+        srv = _buscar_archivo("server.js")
+        if not node or not srv:
+            _bridge_error = "no encuentro server.js / node junto a HolyBridge"
+            print("⚠️ Letras cinéticas: " + _bridge_error)
+            return None
+
+        for puerto in candidatos:
+            try:
+                log = open(os.path.join(_app_dir(), "kinetic_bridge.log"), "a",
+                           encoding="utf-8", errors="replace")
+            except Exception:
+                log = subprocess.DEVNULL
+            entorno = dict(os.environ, BRIDGE_PORT=str(puerto))
+            try:
+                proc = subprocess.Popen(
+                    [node, srv], cwd=os.path.dirname(srv), env=entorno,
+                    stdout=log, stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            except Exception as e:
+                _bridge_error = f"no pude arrancar el bridge: {e}"[:160]
+                print("⚠️ Letras cinéticas: " + _bridge_error)
+                return None
+            for _ in range(24):          # hasta ~3,6 s de arranque
+                if _bridge_responde(puerto, 0.4):
+                    _bridge_proceso = proc
+                    _usar_puerto_bridge(puerto)
+                    _bridge_error = ""
+                    print(f"🎬 Letras cinéticas: bridge levantado en {puerto}")
+                    return puerto
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.15)
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        _bridge_error = ("el bridge no arrancó (ver kinetic_bridge.log; puede que "
+                         + str(candidatos[0]) + " esté ocupado por otro programa)")
+        print("⚠️ Letras cinéticas: " + _bridge_error)
+        return None
+
+
 @app.middleware("http")
 async def _proxy_cinetica(request, call_next):
     """Reenvía al bridge los pedidos del panel, tipografías y texto."""
@@ -562,24 +675,33 @@ async def _proxy_cinetica(request, call_next):
     if not _es_cinetica(ruta):
         return await call_next(request)
 
-    url = _BRIDGE_BASE + ("/" if ruta == "/overlay" else ruta)
-    if request.url.query:
-        url += "?" + str(request.url.query)
+    query = ("?" + str(request.url.query)) if request.url.query else ""
     cuerpo = await request.body()
     cabeceras = {k: v for k, v in request.headers.items()
                  if k.lower() in ("content-type", "accept", "cache-control", "last-event-id")}
     sse = ruta == "/api/events"
 
     def _pedir():
+        url = _BRIDGE_BASE + ("/" if ruta == "/overlay" else ruta) + query
         return requests.request(request.method, url, data=cuerpo or None,
                                 headers=cabeceras, stream=True,
                                 timeout=(3, None) if sse else (5, 30))
 
+    respuesta = None
     try:
         respuesta = await run_in_threadpool(_pedir)
     except Exception:
+        # El bridge puede no estar levantado todavía: se arranca y se reintenta
+        # una sola vez, así el panel nunca queda en blanco.
+        if await run_in_threadpool(asegurar_bridge):
+            try:
+                respuesta = await run_in_threadpool(_pedir)
+            except Exception:
+                respuesta = None
+    if respuesta is None:
         return JSONResponse(
-            {"ok": False, "error": "El bridge de letras no está corriendo (prendé el switch de NDI o reiniciá HolyBridge)"},
+            {"ok": False, "error": "El bridge de letras no está corriendo"
+                                   + ((" · " + _bridge_error) if _bridge_error else "")},
             status_code=503)
 
     salida = {}
@@ -666,6 +788,10 @@ def ndi_arrancar():
             print("⚠️ NDI: " + _ndi_error)
             return False
         cmd = py + ["-u", script]
+    # El emisor lee el texto del bridge: mismo puerto que el panel/proxy.
+    if not _bridge_responde(KINETIC_PORT):
+        asegurar_bridge()
+    cmd = cmd + ["--bridge", f"http://127.0.0.1:{KINETIC_PORT}"]
     try:
         log = open(NDI_LOG, "a", encoding="utf-8", errors="replace")
         log.write("\n=== %s · arrancando emisor NDI ===\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -3244,6 +3370,10 @@ def setup_tray():
 
     # Arranque solo: destinos configurados + Holyrics + un destino que responda.
     threading.Thread(target=autoarm_worker, daemon=True, name="autoarm").start()
+
+    # El panel de Letras cinéticas necesita el bridge Node: lo levantamos en
+    # segundo plano para no demorar la ventana.
+    threading.Thread(target=asegurar_bridge, daemon=True, name="bridge-letras").start()
 
     if config["auto_start"]:
         def delayed_autostart():
