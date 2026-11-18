@@ -1,11 +1,11 @@
-; Instalador de HolyBridge 6.5.4 (Inno Setup 7)
+; Instalador de HolyBridge 6.5.5 (Inno Setup 7)
 ; Compilar:  "C:\Program Files\Inno Setup 7\ISCC.exe" installer\HolyBridgeSetup.iss
 ; Toma la carpeta portable ya armada (public/, lib/, ndi/, runtime/) y crea
 ; accesos, entrada en "Aplicaciones instaladas" y desinstalador.
 
 #define AppName "HolyBridge"
-#define AppVersion "6.5.4"
-#define AppExe "HolyBridgeProv6.5.4.exe"
+#define AppVersion "6.5.5"
+#define AppExe "HolyBridgeProv6.5.5.exe"
 #define AppUrl "http://127.0.0.1:7333/"
 
 [Setup]
@@ -23,8 +23,8 @@ DefaultGroupName={#AppName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 OutputDir=..\dist
-OutputBaseFilename=HolyBridge-6.5.4-Setup
-SetupIconFile=..\portable\HolyBridge-6.5.4-portable\HolyBridge.ico
+OutputBaseFilename=HolyBridge-6.5.5-Setup
+SetupIconFile=..\portable\HolyBridge-6.5.5-portable\HolyBridge.ico
 UninstallDisplayIcon={app}\HolyBridge.ico
 Compression=lzma2/max
 SolidCompression=yes
@@ -44,7 +44,12 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "Crear un acceso directo en el escritorio"; GroupDescription: "Accesos directos:"; Flags: checkedonce
 
 [Files]
-Source: "..\portable\HolyBridge-6.5.4-portable\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "kinetic_ndi.log,*.zip,*.log"
+Source: "..\portable\HolyBridge-6.5.5-portable\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "kinetic_ndi.log,*.zip,*.log"
+
+[InstallDelete]
+; Al actualizar desde la 6.5.3 rota, sacamos su exe para que no queden dos.
+Type: files; Name: "{app}\HolyBridgeProv6.5.3.exe"
+Type: files; Name: "{app}\HolyBridgeProv6.5.4.exe"
 
 [Icons]
 ; El .vbs arranca el bridge oculto (Node incluido) y después la interfaz.

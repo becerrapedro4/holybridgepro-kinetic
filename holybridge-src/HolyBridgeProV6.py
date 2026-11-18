@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Holyrics Bridge Pro (v6.5.4) — puente entre Holyrics y vMix / Resolume / OBS
+# Holyrics Bridge Pro (v6.5.5) — puente entre Holyrics y vMix / Resolume / OBS
 import sys
 import os
 import re
@@ -464,7 +464,9 @@ def _escribir_json(cambios):
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(datos, f, ensure_ascii=False, indent=2)
         return True
-    except Exception:
+    except Exception as e:
+        # Antes fallaba en silencio y la config quedaba vieja sin avisar.
+        print(f"⚠️ No pude escribir {CONFIG_PATH}: {e}", flush=True)
         return False
 
 def reg_get(key):
@@ -484,7 +486,7 @@ def reg_set(key, value):
 
 def persistir(cambios):
     """Escribe los cambios en el registro Y en holybridgeconfig.json de una sola vez."""
-    plano = {}
+    plano = {"_ts": str(time.time())}   # marca de tiempo: decide quién gana al cargar
     for key, valor in cambios.items():
         if valor is True:
             txt = "1"
@@ -494,7 +496,7 @@ def persistir(cambios):
             txt = "" if valor is None else str(valor)
         plano[key] = txt
         reg_set(key, txt)
-    _escribir_json(plano)
+    return _escribir_json(plano)
 
 # Claves que funcionan como interruptor: "1"/"0" en el registro, bool en memoria
 BOOL_KEYS = {"vmix_enabled", "vmix_multi", "resolume_enabled", "resolume_multi",
@@ -502,13 +504,24 @@ BOOL_KEYS = {"vmix_enabled", "vmix_multi", "resolume_enabled", "resolume_multi",
              "reso_split_biblia", "obs_split_biblia", "auto_start", "ndi_enabled",
              "texto_mayusculas", "texto_minusculas", "texto_sin_version", "texto_sin_salto"}
 
+def _ts_config(valor):
+    try:
+        return float(valor)
+    except Exception:
+        return 0.0
+
+
 def load_config():
-    # Orden de prioridad: defaults < registro < holybridgeconfig.json
-    # (el JSON gana para poder copiar la config a otra PC).
+    # Orden de prioridad: defaults < registro < holybridgeconfig.json, pero gana
+    # el que se guardó ÚLTIMO (marca _ts). Antes el JSON siempre pisaba al
+    # registro: si el archivo había quedado viejo, la app abría con datos
+    # desactualizados aunque el guardado nuevo estuviera en el registro.
     cfg = {k: reg_get(k) for k in DEFAULTS}
-    for key, valor in _leer_json().items():
-        if key in DEFAULTS:
-            cfg[key] = valor
+    datos = _leer_json()
+    if datos and _ts_config(datos.get("_ts")) >= _ts_config(reg_get("_ts")):
+        for key, valor in datos.items():
+            if key in DEFAULTS:
+                cfg[key] = valor
     cfg = {k: ("" if v is None else str(v)) for k, v in cfg.items()}
     for key in BOOL_KEYS:
         cfg[key] = cfg[key] == "1"
@@ -516,12 +529,12 @@ def load_config():
 
 config = load_config()
 APP_PORT = int(config["app_port"])
-# Panel del overlay de letras cinéticas (bridge Node que lee Holyrics y anima
+# Panel del overlay de Kinetic Lyrics (bridge Node que lee Holyrics y anima
 # el texto para OBS). Se abre desde el menú lateral, debajo de OBS.
 def _ip_local():
     """IP de este PC en la red local.
 
-    El panel de Letras cinéticas tiene que abrirse también desde el celular o
+    El panel de Kinetic Lyrics tiene que abrirse también desde el celular o
     desde otra PC: con 127.0.0.1 sólo existe en esta máquina.
     """
     try:
@@ -606,6 +619,48 @@ def _usar_puerto_bridge(puerto):
     KINETIC_URL = f"http://{_ip_local()}:{puerto}/config"
 
 
+def _holyrics_para_bridge():
+    """IP/puerto/intervalo de Holyrics tal como están cargados en la GUI.
+
+    El bridge tiene su propio config.json, así que si el operador cambia la IP
+    en Inicio, Kinetic Lyrics seguía leyendo la vieja. Estos valores se le
+    empujan por HTTP y por entorno al arrancarlo.
+    """
+    ip = str(live_state.get("holyrics_ip") or "127.0.0.1").strip() or "127.0.0.1"
+    try:
+        puerto = int(str(live_state.get("holyrics_port") or 80))
+    except Exception:
+        puerto = 80
+    try:
+        intervalo_ms = int(max(0.025, float(str(live_state.get("intervalo") or "0.5"))) * 1000)
+    except Exception:
+        intervalo_ms = 500
+    return {
+        "ip": ip,
+        "port": puerto,
+        "intervalMs": intervalo_ms,
+        "apiPort": str(live_state.get("holyrics_api_port") or ""),
+        "apiToken": str(live_state.get("holyrics_api_token") or ""),
+        "enabled": True,
+    }
+
+
+def sincronizar_holyrics_bridge(puerto=None):
+    """Le pasa a Kinetic Lyrics la MISMA configuración de Holyrics de la GUI."""
+    puerto = puerto or KINETIC_PORT
+    datos = _holyrics_para_bridge()
+    try:
+        r = requests.post(f"http://127.0.0.1:{puerto}/api/holyrics", json=datos, timeout=3)
+        if r.status_code == 200:
+            print(f"🎼 Kinetic Lyrics: Holyrics {datos['ip']}:{datos['port']} "
+                  f"cada {datos['intervalMs']} ms", flush=True)
+            return True
+        print(f"⚠️ Kinetic Lyrics: no pude pasar la IP de Holyrics (HTTP {r.status_code})", flush=True)
+    except Exception as e:
+        print(f"⚠️ Kinetic Lyrics: no pude pasar la IP de Holyrics ({e})", flush=True)
+    return False
+
+
 def asegurar_bridge():
     """Deja el bridge de letras escuchando y devuelve su puerto (o None).
 
@@ -624,13 +679,14 @@ def asegurar_bridge():
             if _bridge_responde(puerto):
                 _usar_puerto_bridge(puerto)
                 _bridge_error = ""
+                sincronizar_holyrics_bridge(puerto)
                 return puerto
 
         node = _buscar_archivo("runtime", "node.exe") or shutil.which("node")
         srv = _buscar_archivo("server.js")
         if not node or not srv:
             _bridge_error = "no encuentro server.js / node junto a HolyBridge"
-            print("⚠️ Letras cinéticas: " + _bridge_error)
+            print("⚠️ Kinetic Lyrics: " + _bridge_error)
             return None
 
         for puerto in candidatos:
@@ -639,7 +695,11 @@ def asegurar_bridge():
                            encoding="utf-8", errors="replace")
             except Exception:
                 log = subprocess.DEVNULL
-            entorno = dict(os.environ, BRIDGE_PORT=str(puerto))
+            hc = _holyrics_para_bridge()
+            entorno = dict(os.environ, BRIDGE_PORT=str(puerto),
+                           HOLYRICS_IP=hc["ip"], HOLYRICS_PORT=str(hc["port"]),
+                           HOLYRICS_INTERVAL=str(hc["intervalMs"]),
+                           HOLYRICS_ENABLED="1")
             try:
                 proc = subprocess.Popen(
                     [node, srv], cwd=os.path.dirname(srv), env=entorno,
@@ -647,14 +707,15 @@ def asegurar_bridge():
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             except Exception as e:
                 _bridge_error = f"no pude arrancar el bridge: {e}"[:160]
-                print("⚠️ Letras cinéticas: " + _bridge_error)
+                print("⚠️ Kinetic Lyrics: " + _bridge_error)
                 return None
             for _ in range(24):          # hasta ~3,6 s de arranque
                 if _bridge_responde(puerto, 0.4):
                     _bridge_proceso = proc
                     _usar_puerto_bridge(puerto)
                     _bridge_error = ""
-                    print(f"🎬 Letras cinéticas: bridge levantado en {puerto}")
+                    print(f"🎬 Kinetic Lyrics: bridge levantado en {puerto}")
+                    sincronizar_holyrics_bridge(puerto)
                     return puerto
                 if proc.poll() is not None:
                     break
@@ -665,7 +726,7 @@ def asegurar_bridge():
                 pass
         _bridge_error = ("el bridge no arrancó (ver kinetic_bridge.log; puede que "
                          + str(candidatos[0]) + " esté ocupado por otro programa)")
-        print("⚠️ Letras cinéticas: " + _bridge_error)
+        print("⚠️ Kinetic Lyrics: " + _bridge_error)
         return None
 
 
@@ -686,7 +747,7 @@ def detener_bridge():
                 proc.wait(timeout=3)
             except Exception:
                 proc.kill()
-        print("⏹  Letras cinéticas: bridge detenido (lo había arrancado la GUI)")
+        print("⏹  Kinetic Lyrics: bridge detenido (lo había arrancado la GUI)")
     except Exception:
         pass
 
@@ -740,7 +801,7 @@ async def _proxy_cinetica(request, call_next):
     return StreamingResponse(respuesta.iter_content(64 if sse else 4096),
                              status_code=respuesta.status_code, headers=salida)
 
-# ─── EMISOR NDI (letras cinéticas) ─────────────────────────────────────
+# ─── EMISOR NDI (Kinetic Lyrics) ─────────────────────────────────────
 # Se lanza como proceso aparte con Python 3.9 (es la versión donde anda NDI).
 # Lee el texto del bridge (7333) y la configuración del panel de Letras
 # cinéticas, así por NDI sale exactamente lo mismo que por la web.
@@ -792,6 +853,24 @@ def _python_39():
             continue
     return None
 
+def _ndi_matar_huerfanos():
+    """Cierra emisores NDI que quedaron colgados de corridas anteriores.
+
+    Cada uno registra su propia fuente con el mismo nombre: en OBS/vMix se veían
+    varias "Kinetic Lyrics" que no hacían nada. Antes de lanzar uno nuevo, se
+    limpian los viejos.
+    """
+    if os.name != "nt":
+        return
+    try:
+        subprocess.run(["taskkill", "/F", "/IM", "HolyBridgeNDI.exe"],
+                       capture_output=True, timeout=10,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        print("🧹 NDI: limpiando emisores viejos", flush=True)
+    except Exception:
+        pass
+
+
 def ndi_estado():
     return "on" if (_ndi_proceso is not None and _ndi_proceso.poll() is None) else "off"
 
@@ -818,6 +897,7 @@ def ndi_arrancar():
     if not _bridge_responde(KINETIC_PORT):
         asegurar_bridge()
     cmd = cmd + ["--bridge", f"http://127.0.0.1:{KINETIC_PORT}"]
+    _ndi_matar_huerfanos()
     try:
         log = open(NDI_LOG, "a", encoding="utf-8", errors="replace")
         log.write("\n=== %s · arrancando emisor NDI ===\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -840,20 +920,36 @@ def ndi_arrancar():
         return False
 
 def ndi_detener():
+    """Cierra el emisor y TODOS sus hijos.
+
+    El HolyBridgeNDI.exe compilado con PyInstaller --onefile es un bootloader
+    que lanza el proceso real: terminar sólo al padre dejaba el emisor vivo en
+    segundo plano (y con él una fuente NDI fantasma). Por eso se mata el árbol.
+    """
     global _ndi_proceso
-    if _ndi_proceso is None:
+    proc, _ndi_proceso = _ndi_proceso, None
+    if proc is None:
         return
     try:
-        if _ndi_proceso.poll() is None:
-            _ndi_proceso.terminate()
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                           capture_output=True, timeout=12,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        elif proc.poll() is None:
+            proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except Exception:
             try:
-                _ndi_proceso.wait(timeout=4)
+                proc.kill()
             except Exception:
-                _ndi_proceso.kill()
-    except Exception:
-        pass
-    _ndi_proceso = None
+                pass
+    except Exception as e:
+        print(f"⚠️ NDI: no pude cerrar el emisor ({e})", flush=True)
     print("⏹  NDI: emisor detenido")
+
+
+atexit.register(ndi_detener)
 
 def ndi_sincronizar():
     """Alinea el emisor con el switch (lo llama el worker, también desde el tray)."""
@@ -967,6 +1063,15 @@ def _aplicar_cambios(cambios):
         set_windows_autostart(nuevos["auto_start"])
     if any(k in nuevos for k in _CLAVES_FORMATO):
         _reaplicar_formato()   # el switch se nota ya mismo, sin esperar a Holyrics
+    # Si cambió la IP/puerto de Holyrics, Kinetic Lyrics tiene que enterarse ya:
+    # sin esto el panel seguía leyendo la IP vieja hasta reiniciar el bridge.
+    if any(k in nuevos for k in ("holyrics_ip", "holyrics_port", "intervalo",
+                                 "holyrics_api_port", "holyrics_api_token")):
+        try:
+            threading.Thread(target=sincronizar_holyrics_bridge, daemon=True,
+                             name="holyrics-bridge").start()
+        except Exception:
+            pass
     return True
 
 def save_config(evento):
@@ -2329,6 +2434,9 @@ def _leer_via_api():
         pass
     return None
 
+_ultimo_autoarm = 0.0
+
+
 def worker():
     """Hilo único y permanente: sondea Holyrics sólo mientras el bridge está encendido.
 
@@ -2343,6 +2451,17 @@ def worker():
         except Exception:
             pass
         if not bridge_on.is_set():
+            # Auto-arranque continuo: si el operador abre Holyrics y un destino
+            # (vMix/Resolume/OBS) ya está activo, el bridge arranca solo, sin
+            # esperar a reiniciar la app. Se revisa cada 5 s y no pelea con un
+            # STOP manual.
+            if (not _autoarm_cancelado.is_set()
+                    and time.time() - _ultimo_autoarm > 5.0):
+                _ultimo_autoarm = time.time()
+                ok, motivo = _autoarm_estado()
+                if ok:
+                    print(f"▶️ Auto-arranque: {motivo} — bridge ONLINE", flush=True)
+                    toggle_bridge(True, silent=True)
             time.sleep(0.15)
             continue
         try:
@@ -2538,7 +2657,7 @@ def _tarjeta_pc(servicio, indice=None):
         """Input de un campo de esta PC (vacío en una extra = hereda)."""
         if principal:
             inp = ui.input(etiqueta, value=val(clave), password=password)
-            inp.props('dark filled dense').classes('w-full').on_value_change(save_config)
+            inp.props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config)
             controles[pref + clave] = inp
             return inp
         heredado = "" if clave == "nombre" else str(live_state.get(pref + clave, "") or "")
@@ -2807,14 +2926,20 @@ def main_page():
                         except Exception:
                             continue
                     _aplicar_cambios(cambios)
+                    # Se escribe SIEMPRE el archivo completo: antes, si los valores
+                    # no cambiaban respecto de la memoria, no se escribía nada y
+                    # el JSON quedaba viejo (o no existía) en la PC nueva.
+                    ok = persistir(cambios)
                     if notificar:
-                        ui.notify(f"Configuración guardada en {os.path.basename(CONFIG_PATH)}", type="positive")
+                        ui.notify(("Configuración guardada en " if ok else "No se pudo escribir ")
+                                  + CONFIG_PATH,
+                                  type="positive" if ok else "negative")
                 def guardar_todo():
                     guardar_sesion()
                 def iniciar_bridge():
                     guardar_sesion(notificar=False)
                     toggle_bridge(True, silent=False)
-                app_port_input = ui.input("Puerto", value=config["app_port"]).props('dark dense filled').classes('w-20').on_value_change(save_config).tooltip("Puerto de la GUI: se aplica al reiniciar")
+                app_port_input = ui.input("Puerto", value=config["app_port"]).props('dark dense filled debounce=400').classes('w-20').on_value_change(save_config).tooltip("Puerto de la GUI: se aplica al reiniciar")
                 status_dot = ui.element('div').classes('w-3 h-3 rounded-full status-dot-idle').tooltip("Verde: Holyrics conectado · Rojo: sin conexión · Gris: bridge apagado")
                 dot_label = ui.label("APAGADO").classes('mono').style('font-size:10px; letter-spacing:2px; color: rgba(255,255,255,0.45);')
                 ui.button("GUARDAR", on_click=guardar_todo).props('color=blue-8 icon=save dense').style('font-family: Rajdhani; font-weight:700; letter-spacing:2px;')
@@ -2830,7 +2955,7 @@ def main_page():
                        ("vmix", "vMix", "/assets/vmix.png", None, True),
                        ("reso", "Resolume", "/assets/resolume.svg", None, False),
                        ("obs", "OBS", "/assets/obs.png", None, True),
-                       ("cinetica", "Letras cinéticas", None, "auto_awesome", False))
+                       ("cinetica", "Kinetic Lyrics", None, "auto_awesome", False))
         for _clave, _etiqueta, _logo, _icono, _fondo in _items_menu:
             _fila = ui.row().classes('w-full items-center gap-3 menu-item').style('cursor:pointer; padding:8px 10px;')
             with _fila:
@@ -2844,7 +2969,7 @@ def main_page():
             _fila.on('click', lambda e=None, c=_clave: _ir(c))
             botones_menu[_clave] = _fila
 
-        # Letras cinéticas es una sección más: el panel se abre DENTRO de esta
+        # Kinetic Lyrics es una sección más: el panel se abre DENTRO de esta
         # página (no en otra pestaña) y se sirve por el mismo puerto de la GUI.
         ui.separator().style('border-color: rgba(255,255,255,0.08); margin: 10px 0;')
         ui.label("Cada PC tiene su tarjeta: conexión, textos y test.").style(
@@ -2866,10 +2991,16 @@ def main_page():
         cinetica_box = ui.element('div').classes('w-full')
         with cinetica_box:
             with ui.row().classes('w-full items-center gap-3').style('padding: 0 2px 8px;'):
-                ui.label("LETRAS CINÉTICAS").classes('card-title').style('color: rgba(120,255,190,0.9);')
+                ui.label("KINETIC LYRICS").classes('card-title').style('color: rgba(120,255,190,0.9);')
                 ui.label("Efectos, tipografías y resaltados del overlay web y de NDI.").style(
                     'font-family: Share Tech Mono; font-size:10px; color: rgba(255,255,255,0.5); white-space: normal;')
                 ui.space()
+                # El switch NDI vive acá arriba, en la sección que controla.
+                ndi_switch = ui.switch("NDI · Kinetic Lyrics", value=config["ndi_enabled"]).on_value_change(save_config).tooltip("Emite por NDI exactamente lo mismo que ves en el panel: mismo efecto, tipografía y resaltado")
+                ndi_status = ui.label("").classes('mono').style('font-size:9px; color: rgba(255,255,255,0.5); white-space: normal;')
+                ui.timer(1.5, lambda: ndi_status.set_text(
+                    ("● emitiendo como Kinetic Lyrics" if ndi_estado() == "on" else "○ NDI detenido")
+                    + ((" · " + _ndi_error) if _ndi_error else "")))
 
                 def _recargar_panel():
                     ui.run_javascript(
@@ -2900,24 +3031,20 @@ def main_page():
             with _card():
                 ui.label("HOLYRICS").classes('card-title').style('color: rgba(0,160,255,0.9);')
                 ui.separator().style('border-color: rgba(255,255,255,0.07); margin: 8px 0;')
-                holyrics_ip = ui.input("IP", value=config["holyrics_ip"]).props('dark filled dense').classes('w-full').on_value_change(save_config)
-                holyrics_port = ui.input("Port", value=config["holyrics_port"]).props('dark filled dense').classes('w-full').on_value_change(save_config)
-                intervalo = ui.input("Pool (s)", value=config["intervalo"]).props('dark filled dense').classes('w-full').on_value_change(save_config).tooltip("Segundos entre consultas a Holyrics (mínimo 0.05)")
+                holyrics_ip = ui.input("IP", value=config["holyrics_ip"]).props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config)
+                holyrics_port = ui.input("Port", value=config["holyrics_port"]).props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config)
+                intervalo = ui.input("Pool (s)", value=config["intervalo"]).props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config).tooltip("Segundos entre consultas a Holyrics (mínimo 0.05)")
                 with ui.expansion("API Server (respaldo)").classes('w-full').style('font-family: Rajdhani; font-size:11px;'):
                     ui.label("Si la vista de Holyrics falla, el texto se lee por el API Server.").style('font-family: Share Tech Mono; font-size:9px; color: rgba(255,255,255,0.5); white-space: normal;')
-                    holyrics_api_port = ui.input("API Port", value=config["holyrics_api_port"]).props('dark filled dense').classes('w-full').on_value_change(save_config).tooltip("Puerto del API Server de Holyrics (por defecto 8091). Vacío = desactivado")
-                    holyrics_api_token = ui.input("API Token", value=config["holyrics_api_token"], password=True).props('dark filled dense').classes('w-full').on_value_change(save_config).tooltip("Token creado en Holyrics → Settings → API Server")
+                    holyrics_api_port = ui.input("API Port", value=config["holyrics_api_port"]).props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config).tooltip("Puerto del API Server de Holyrics (por defecto 8091). Vacío = desactivado")
+                    holyrics_api_token = ui.input("API Token", value=config["holyrics_api_token"], password=True).props('dark filled dense debounce=400').classes('w-full').on_value_change(save_config).tooltip("Token creado en Holyrics → Settings → API Server")
                 ui.separator().style('border-color: rgba(255,255,255,0.07); margin: 8px 0;')
                 detect_result = ui.label("").style('font-family: Share Tech Mono; font-size:10px; min-height:16px;')
                 detect_btn = ui.button("🔍 Auto-detectar Holyrics", on_click=lambda: autodetect_holyrics(holyrics_port.value, detect_result, detect_btn)).props('flat dense').classes('w-full').style('font-family: Rajdhani; font-size:12px; color: rgba(0,180,255,0.8); margin-top:4px;')
                 ui.separator().style('border-color: rgba(255,255,255,0.07); margin: 8px 0;')
-                auto_start_toggle = ui.switch("Auto-Start", value=config["auto_start"]).on_value_change(save_config)
-                ui.separator().style('border-color: rgba(255,255,255,0.07); margin: 8px 0;')
-                ndi_switch = ui.switch("NDI · letras cinéticas", value=config["ndi_enabled"]).on_value_change(save_config).tooltip("Emite la letra por NDI con los efectos y resaltados del panel de Letras cinéticas")
-                ndi_status = ui.label("").classes('mono').style('font-size:9px; color: rgba(255,255,255,0.5); white-space: normal;')
-                ui.timer(1.5, lambda: ndi_status.set_text(
-                    ("● emitiendo como Kinetic Lyrics" if ndi_estado() == "on" else "○ NDI detenido")
-                    + ((" · " + _ndi_error) if _ndi_error else "")))
+                auto_start_toggle = ui.switch("Auto-Start", value=config["auto_start"]).on_value_change(save_config).tooltip("Abre HolyBridge solo al iniciar sesión en Windows y arranca el bridge automáticamente cuando Holyrics y un receptor (vMix, Resolume u OBS) están activos")
+                ui.label("Abre la app con Windows y arranca el bridge sola cuando Holyrics y un receptor responden.").style(
+                    'font-family: Share Tech Mono; font-size:9px; color: rgba(255,255,255,0.5); white-space: normal;')
 
             with _card():
                 ui.label("FORMATO DEL TEXTO").classes('card-title').style('color: rgba(180,140,255,0.9);')
@@ -3002,7 +3129,7 @@ def main_page():
         # ── FOOTER DE LAS SECCIONES ──
         with ui.row().classes('w-full justify-center items-center gap-2').style('margin-top: 4px; padding: 12px 0 6px 0; border-top: 1px solid rgba(255,255,255,0.08);'):
             ui.label("HolyBridge Pro").style('font-family: Rajdhani; font-size:12px; letter-spacing:2px; color: rgba(255,255,255,0.55);')
-            ui.label("v6.5.4").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
+            ui.label("v6.5.5").classes('mono').style('font-size:11px; letter-spacing:2px; color: rgba(0,220,150,0.85);')
 
     # ─── NAVEGACIÓN ENTRE PÁGINAS ────────────────────────────────────────
     def _mostrar_pagina():
@@ -3401,7 +3528,7 @@ def setup_tray():
     # Arranque solo: destinos configurados + Holyrics + un destino que responda.
     threading.Thread(target=autoarm_worker, daemon=True, name="autoarm").start()
 
-    # El panel de Letras cinéticas necesita el bridge Node: lo levantamos en
+    # El panel de Kinetic Lyrics necesita el bridge Node: lo levantamos en
     # segundo plano para no demorar la ventana.
     threading.Thread(target=asegurar_bridge, daemon=True, name="bridge-letras").start()
 

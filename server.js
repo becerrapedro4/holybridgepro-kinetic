@@ -54,6 +54,9 @@ const EFFECTS = new Set([
   'bounce', 'spin', 'swing', 'punch', 'stretch', 'drift', 'reveal', 'none',
 ]);
 
+/** Fuente Holyrics activa (se puede reconfigurar en caliente por HTTP). */
+let holyricsSource = null;
+
 /** Configuración que publica el panel (la usa el emisor NDI). */
 let panelConfig = {
   effect: CONFIG.effect,
@@ -443,6 +446,51 @@ async function ingest(req, res, alias) {
   sendJson(res, 200, { ok: true, revision: state.revision });
 }
 
+/* ---------------------------------------------------------------- holyrics */
+
+/**
+ * (Re)configura el sondeo de Holyrics sin reiniciar el bridge.
+ *
+ * La GUI guarda la IP/puerto en holybridgeconfig.json, pero el bridge tiene su
+ * propio config.json: sin esto, Kinetic Lyrics seguía leyendo la IP vieja hasta
+ * reiniciar todo. Con este endpoint la GUI empuja la configuración al guardar.
+ */
+function aplicarHolyrics(cambios) {
+  const cfg = { ...CONFIG.holyrics, ...(cambios || {}) };
+  const ip = String(cfg.ip || '127.0.0.1').trim() || '127.0.0.1';
+  const port = Number(cfg.port) || 80;
+  const intervalMs = clamp(Number(cfg.intervalMs) || 60, 25, 2000);
+  const activa = cfg.enabled !== false && String(cfg.enabled) !== '0';
+
+  if (holyricsSource) {
+    try { holyricsSource.stop(); } catch (err) { /* ya estaba detenida */ }
+    holyricsSource = null;
+  }
+
+  CONFIG.holyrics = { ...cfg, ip, port, intervalMs, enabled: activa };
+
+  if (!activa) {
+    console.log('[holyrics] fuente desactivada');
+    return { enviando: false, ip, port, intervalMs };
+  }
+
+  holyricsSource = startHolyricsSource(CONFIG.holyrics, (patch) => publish(patch));
+  console.log(`[holyrics] fuente configurada: ${ip}:${port} cada ${intervalMs}ms`);
+  return { enviando: true, ip, port, intervalMs };
+}
+
+/** Estado actual de la fuente, sin tocar nada (para diagnóstico de la GUI). */
+function aplicarHolyricsEstado() {
+  const h = CONFIG.holyrics || {};
+  return {
+    enviando: Boolean(holyricsSource),
+    ip: h.ip,
+    port: h.port,
+    intervalMs: h.intervalMs,
+    apiPort: h.apiPort || '',
+  };
+}
+
 /* ----------------------------------------------------------------- server */
 
 const server = http.createServer(async (req, res) => {
@@ -470,6 +518,28 @@ const server = http.createServer(async (req, res) => {
       panelConfig = { ...panelConfig, ...sanitizePanel(body) };
       panelConfig.updatedAt = Date.now();
       return sendJson(res, 200, { ok: true, panel: panelConfig });
+    } catch (err) {
+      return sendJson(res, 400, { ok: false, error: err.message });
+    }
+  }
+
+  if (pathname === '/api/holyrics' && req.method === 'GET') {
+    return sendJson(res, 200, { ok: true, ...aplicarHolyricsEstado() });
+  }
+
+  if (pathname === '/api/holyrics' && req.method === 'POST') {
+    try {
+      const body = JSON.parse((await readBody(req)) || '{}');
+      const cambios = {};
+      if (body.ip !== undefined) cambios.ip = String(body.ip).trim();
+      if (body.port !== undefined) cambios.port = Number(body.port) || 80;
+      if (body.intervalMs !== undefined) cambios.intervalMs = Number(body.intervalMs) || 60;
+      if (body.apiPort !== undefined) cambios.apiPort = String(body.apiPort || '');
+      if (body.apiToken !== undefined) cambios.apiToken = String(body.apiToken || '');
+      if (body.enabled !== undefined) cambios.enabled = Boolean(body.enabled);
+      if (body.format && typeof body.format === 'object') cambios.format = body.format;
+      const estadoFuente = aplicarHolyrics(cambios);
+      return sendJson(res, 200, { ok: true, ...estadoFuente });
     } catch (err) {
       return sendJson(res, 400, { ok: false, error: err.message });
     }
@@ -611,11 +681,7 @@ server.listen(CONFIG.port, CONFIG.host, () => {
       }
     }
   }
-  if (CONFIG.holyrics.enabled) {
-    startHolyricsSource(CONFIG.holyrics, (patch) => publish(patch));
-  } else {
-    console.log('[holyrics] fuente desactivada (config.holyrics.enabled = false)');
-  }
+  aplicarHolyrics({});
   connectUpstreamWs(CONFIG.upstreamWs);
   startPoller(CONFIG.poller);
 });
