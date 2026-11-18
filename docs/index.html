@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>HolyBridge Pro · Letras cinéticas desde Holyrics para OBS, vMix y NDI</title>
-<meta name="description" content="HolyBridge Pro convierte las letras de Holyrics en letras cinéticas en vivo, con dos salidas idénticas: overlay web transparente para OBS/vMix y emisor NDI." />
+<title>HolyBridge Pro · Letras cinéticas desde Holyrics para OBS, vMix, Resolume y NDI</title>
+<meta name="description" content="HolyBridge Pro convierte las letras de Holyrics en letras cinéticas en vivo, con dos salidas idénticas: overlay web transparente para OBS/vMix y emisor NDI para OBS, vMix y Resolume." />
 <meta property="og:title" content="HolyBridge Pro · Letras cinéticas desde Holyrics" />
 <meta property="og:description" content="18 animaciones, 8 tipografías, 7 modos de resaltado, lienzo fijo y salida NDI. Para OBS, vMix y cualquier software de transmisión." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,12 +34,12 @@
 
   <!-- ---------------------------------------------------------------- HERO -->
   <section class="hero">
-    <p class="eyebrow"><span class="pill">v6.5.6</span> Holyrics → OBS · vMix · NDI</p>
+    <p class="eyebrow"><span class="pill">v6.5.6</span> Holyrics → OBS · vMix · Resolume · NDI</p>
     <h1>Las letras de tu culto<br /><span class="accent">ahora se mueven.</span></h1>
     <p class="lead">
       HolyBridge Pro lee lo que Holyrics está mostrando y lo empuja a la pantalla
       en milisegundos, palabra por palabra. Dos salidas idénticas: overlay web
-      con fondo transparente y emisor NDI con canal alfa.
+      con fondo transparente y emisor NDI con canal alfa, para OBS, vMix y Resolume.
     </p>
 
     <div class="cta">
@@ -93,12 +93,14 @@
         <h3><span class="tag">NDI</span> Emisor con alfa</h3>
         <p>
           Un ejecutable propio publica la fuente <strong>Kinetic Lyrics</strong> en la red.
-          OBS y vMix la detectan como cualquier otra cámara NDI, con transparencia.
+          OBS, vMix y Resolume la detectan como cualquier otra cámara NDI, con transparencia
+          (en Resolume Arena / Avenue, como clip NDI de la composición).
         </p>
         <ul class="ticks">
           <li>No requiere Python instalado</li>
           <li>Cuadro fijo 1920×1080, palabras sobre la misma línea base</li>
           <li>Se prende y apaga desde la ventana del programa</li>
+          <li>Entra en Resolume sin placa de captura</li>
         </ul>
       </article>
     </div>
@@ -256,7 +258,7 @@
     <h2>De cero a aire en tres pasos</h2>
     <ol class="steps">
       <li class="reveal"><span>1</span><div><h4>Instalá y abrí HolyBridge</h4><p>Doble clic en el instalador. En la ventana, cargá la IP de Holyrics y prendé el bridge.</p></div></li>
-      <li class="reveal"><span>2</span><div><h4>Pegá el link en OBS o vMix</h4><p>Fuente de navegador → <code>http://127.0.0.1:7333/</code> → 1920×1080, fondo transparente. El panel está en <code>/config</code>.</p></div></li>
+      <li class="reveal"><span>2</span><div><h4>Pegá el link en OBS, vMix o Resolume</h4><p>Fuente de navegador → <code>http://127.0.0.1:7333/</code> → 1920×1080, fondo transparente. El panel está en <code>/config</code>. En Resolume, sumá la fuente NDI y ponela sobre la composición.</p></div></li>
       <li class="reveal"><span>3</span><div><h4>Prendé el NDI si lo querés</h4><p>Switch <em>NDI · letras cinéticas</em> y elegí la fuente <strong>Kinetic Lyrics</strong> en tu software.</p></div></li>
     </ol>
   </section>
@@ -291,7 +293,7 @@
     <strong>HolyBridge Pro</strong> · letras cinéticas desde Holyrics ·
     <a href="https://github.com/becerrapedro4/holybridgepro-kinetic" target="_blank" rel="noopener">GitHub</a>
   </p>
-  <p class="small">OBS, vMix y NDI son marcas de sus respectivos dueños.</p>
+  <p class="small">OBS, vMix, Resolume y NDI son marcas de sus respectivos dueños.</p>
 </footer>
 
 <script src="landing.js"></script>
