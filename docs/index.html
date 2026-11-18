@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HolyBridge Pro · Letras cinéticas desde Holyrics para OBS, vMix y NDI</title>
+<meta name="description" content="HolyBridge Pro convierte las letras de Holyrics en letras cinéticas en vivo, con dos salidas idénticas: overlay web transparente para OBS/vMix y emisor NDI." />
+<meta property="og:title" content="HolyBridge Pro · Letras cinéticas desde Holyrics" />
+<meta property="og:description" content="18 animaciones, 8 tipografías, 7 modos de resaltado, lienzo fijo y salida NDI. Para OBS, vMix y cualquier software de transmisión." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Playfair+Display:wght@600;800&family=Pacifico&family=Dancing+Script:wght@600;700&family=Bebas+Neue&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="landing.css" />
+</head>
+<body id="top">
+<div class="bg-glow" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="brand" href="#top">
+    <span class="brand-dot" aria-hidden="true"></span>
+    HolyBridge <span class="brand-pro">Pro</span>
+  </a>
+  <nav class="nav-links">
+    <a href="#salidas">Salidas</a>
+    <a href="#animaciones">Animaciones</a>
+    <a href="#tipografias">Tipografías</a>
+    <a href="#lienzo">Lienzo</a>
+    <a href="#instalar">Instalar</a>
+  </nav>
+  <a class="btn btn-sm" href="#descargar">Descargar</a>
+</header>
+
+<main>
+
+  <!-- ---------------------------------------------------------------- HERO -->
+  <section class="hero">
+    <p class="eyebrow"><span class="pill">v6.5.6</span> Holyrics → OBS · vMix · NDI</p>
+    <h1>Las letras de tu culto<br /><span class="accent">ahora se mueven.</span></h1>
+    <p class="lead">
+      HolyBridge Pro lee lo que Holyrics está mostrando y lo empuja a la pantalla
+      en milisegundos, palabra por palabra. Dos salidas idénticas: overlay web
+      con fondo transparente y emisor NDI con canal alfa.
+    </p>
+
+    <div class="cta">
+      <a class="btn" href="https://github.com/becerrapedro4/holybridgepro-kinetic/releases/latest/download/HolyBridge-Setup.exe">
+        Descargar para Windows
+      </a>
+      <a class="btn ghost" href="https://github.com/becerrapedro4/holybridgepro-kinetic" target="_blank" rel="noopener">
+        Ver en GitHub ↗
+      </a>
+    </div>
+    <p class="meta">6.5.6 · Windows 10/11 · instalador (110 MB) o portable (ZIP)</p>
+
+    <div class="hero-stage reveal">
+      <div class="frame">
+        <span class="frame-tag">Overlay web · 1920×1080</span>
+        <div class="demo" id="heroA" aria-hidden="true"></div>
+      </div>
+      <div class="frame ndi">
+        <span class="frame-tag">NDI · Kinetic Lyrics</span>
+        <div class="demo" id="heroB" aria-hidden="true"></div>
+      </div>
+    </div>
+    <p class="caption">Las dos salidas reciben el mismo texto, el mismo efecto y el mismo lienzo.</p>
+  </section>
+
+  <!-- ------------------------------------------------------------- SALIDAS -->
+  <section class="section" id="salidas">
+    <p class="kicker">Salidas</p>
+    <h2>Una sola letra, dos pantallas iguales</h2>
+    <p class="section-lead">
+      El overlay web y el emisor NDI comparten composición: mismo tamaño de letra,
+      misma línea base, mismos colores. Lo que ajustás en el panel se ve igual en
+      las dos salidas.
+    </p>
+
+    <div class="two-col">
+      <article class="card reveal">
+        <h3><span class="tag">Web</span> Overlay transparente</h3>
+        <p>
+          Fuente de navegador en OBS, vMix, Streamlabs o cualquier software que acepte
+          una URL. Fondo transparente real, sin recuadro negro ni croma.
+        </p>
+        <ul class="ticks">
+          <li>Link listo para copiar desde el panel</li>
+          <li>1920×1080 por defecto, también 1280×720, vertical y 4K</li>
+          <li>Se adapta al tamaño del input sin cambiar la composición</li>
+        </ul>
+      </article>
+
+      <article class="card reveal">
+        <h3><span class="tag">NDI</span> Emisor con alfa</h3>
+        <p>
+          Un ejecutable propio publica la fuente <strong>Kinetic Lyrics</strong> en la red.
+          OBS y vMix la detectan como cualquier otra cámara NDI, con transparencia.
+        </p>
+        <ul class="ticks">
+          <li>No requiere Python instalado</li>
+          <li>Cuadro fijo 1920×1080, palabras sobre la misma línea base</li>
+          <li>Se prende y apaga desde la ventana del programa</li>
+        </ul>
+      </article>
+    </div>
+
+    <figure class="shot reveal">
+      <img src="assets/vmix.webp" alt="vMix mostrando el overlay web y la fuente NDI de Kinetic Lyrics al mismo tiempo" loading="lazy" />
+      <figcaption>vMix con el input <em>Browser: 127.0.0.1</em> a la izquierda y la fuente NDI a la derecha.</figcaption>
+    </figure>
+  </section>
+
+  <!-- --------------------------------------------------------- ANIMACIONES -->
+  <section class="section" id="animaciones">
+    <p class="kicker">Animaciones</p>
+    <h2>18 entradas, palabra por palabra</h2>
+    <p class="section-lead">
+      Cada palabra entra con su propio retardo. Todo se anima con
+      <code>transform</code> y <code>opacity</code>, así que el movimiento no cuesta FPS
+      ni retrasa el texto en vivo. Las tarjetas de abajo son la animación real,
+      no un video.
+    </p>
+
+    <div class="fx-grid" id="fxGrid"></div>
+    <p class="caption">Pasá el mouse por una tarjeta para volver a verla.</p>
+  </section>
+
+  <!-- --------------------------------------------------------- TIPOGRAFÍAS -->
+  <section class="section" id="tipografias">
+    <p class="kicker">Tipografías</p>
+    <h2>Ocho estilos, y las tuyas</h2>
+    <p class="section-lead">
+      Cambiá la letra desde el panel y el link se actualiza solo. También podés subir
+      un <code>.ttf</code>, <code>.otf</code> o <code>.woff2</code> y usarlo al instante en las dos salidas.
+    </p>
+
+    <div class="type-grid" id="typeGrid"></div>
+
+    <div class="two-col tight">
+      <article class="card reveal">
+        <h3>Mayúsculas a tu gusto</h3>
+        <p>Tal cual llega de Holyrics, TODO EN MAYÚSCULAS, todo en minúsculas o Camel Case.</p>
+        <div class="cases" aria-hidden="true">
+          <span>Tal cual</span><span class="up">TODO EN MAYÚSCULAS</span><span>Camel Case</span>
+        </div>
+      </article>
+      <article class="card reveal">
+        <h3>Color y contorno</h3>
+        <p>Color del texto, color de resaltado, contorno y sombra para que la letra se lea sobre cualquier fondo.</p>
+        <div class="swatches" aria-hidden="true">
+          <span style="--c:#ffffff"></span><span style="--c:#ffd23f"></span>
+          <span style="--c:#7ee0a1"></span><span style="--c:#57c98a"></span>
+          <span style="--c:#ff7a7a"></span><span style="--c:#8bb4ff"></span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- RESALTADOS -->
+  <section class="section" id="resaltados">
+    <p class="kicker">Resaltados</p>
+    <h2>Siete formas de destacar una palabra</h2>
+    <p class="section-lead">
+      Escribí <code>*palabra*</code> en la letra o cargá una lista en el panel.
+      El resaltado viaja con el texto a la web y al NDI.
+    </p>
+
+    <div class="hl-grid" id="hlGrid"></div>
+  </section>
+
+  <!-- -------------------------------------------------------------- LIENZO -->
+  <section class="section" id="lienzo">
+    <p class="kicker">Lienzo</p>
+    <h2>El tamaño dejó de ser una lotería</h2>
+    <p class="section-lead">
+      El overlay ya no se encoge ni salta de tamaño cuando cambia la letra. Se dibuja
+      sobre un lienzo fijo y se escala por CSS, así que la composición es siempre la misma.
+    </p>
+
+    <div class="two-col">
+      <article class="card reveal">
+        <h3>Lienzo fijo, igual que NDI</h3>
+        <p>
+          Por defecto 1920×1080, el mismo cuadro que emite el NDI. También 1280×720,
+          1080×1920 vertical, 4K y modo “ventana” para el navegador.
+        </p>
+        <div class="canvas-options">
+          <span class="chip on">1920×1080 · igual que NDI</span>
+          <span class="chip">1280×720</span>
+          <span class="chip">1080×1920 · vertical</span>
+          <span class="chip">3840×2160 · 4K</span>
+          <span class="chip">Ventana</span>
+        </div>
+      </article>
+
+      <article class="card reveal">
+        <h3>Tamaño automático o en píxeles</h3>
+        <p>
+          En automático, la letra ocupa todo el ancho disponible del lienzo y baja de
+          tamaño si el renglón es largo. Si preferís control total, elegí 70, 95, 120,
+          150, 190, 240 o 300 px.
+        </p>
+        <ul class="ticks">
+          <li>Sin saltos al cambiar de estrofa</li>
+          <li>Se recalcula al cambiar el tamaño de la ventana</li>
+          <li>Los renglones de Holyrics se respetan</li>
+        </ul>
+      </article>
+    </div>
+
+    <figure class="shot reveal">
+      <img src="assets/ndi-frame.png" alt="Cuadro de 1920 por 1080 renderizado por el emisor NDI" loading="lazy" />
+      <figcaption>Cuadro 1920×1080 renderizado por el emisor NDI: tildes, ñ y todas las palabras apoyadas en la misma línea base.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ------------------------------------------------------------- HOLYRICS -->
+  <section class="section" id="holyrics">
+    <p class="kicker">Holyrics</p>
+    <h2>Se conecta solo y entiende el español</h2>
+    <p class="section-lead">
+      El bridge consulta <code>/view/text.json</code> de Holyrics cada 60 ms y empuja el
+      cambio por SSE: la letra aparece en el mismo instante en que la mostrás.
+    </p>
+
+    <div class="feature-grid">
+      <article class="mini reveal">
+        <h4>Acentos y ñ</h4>
+        <p>Holyrics manda <code>&amp;ntilde;</code>, <code>&amp;oacute;</code> y <code>&amp;iquest;</code>: la tabla latina completa se decodifica, con mayúsculas y minúsculas.</p>
+      </article>
+      <article class="mini reveal">
+        <h4>Renglones respetados</h4>
+        <p>Si Holyrics manda dos líneas, se ven dos líneas. La letra se achica antes que reacomodar el texto.</p>
+      </article>
+      <article class="mini reveal">
+        <h4>IP compartida</h4>
+        <p>La IP de Holyrics que cargás en la ventana del programa es la misma que usa Kinetic Lyrics.</p>
+      </article>
+      <article class="mini reveal">
+        <h4>Panel en el celular</h4>
+        <p>El panel de configuración se abre desde cualquier PC o teléfono de la red y muestra las 18 animaciones en vivo.</p>
+      </article>
+      <article class="mini reveal">
+        <h4>Autoarranque</h4>
+        <p>La ventana puede levantar el bridge y el emisor NDI sola, y cerrarlos cuando salís.</p>
+      </article>
+      <article class="mini reveal">
+        <h4>Sin Python</h4>
+        <p>Todo viene compilado en el instalador: Node embebido, bridge, emisor NDI y la interfaz.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- INSTALAR -->
+  <section class="section" id="instalar">
+    <p class="kicker">Instalación</p>
+    <h2>De cero a aire en tres pasos</h2>
+    <ol class="steps">
+      <li class="reveal"><span>1</span><div><h4>Instalá y abrí HolyBridge</h4><p>Doble clic en el instalador. En la ventana, cargá la IP de Holyrics y prendé el bridge.</p></div></li>
+      <li class="reveal"><span>2</span><div><h4>Pegá el link en OBS o vMix</h4><p>Fuente de navegador → <code>http://127.0.0.1:7333/</code> → 1920×1080, fondo transparente. El panel está en <code>/config</code>.</p></div></li>
+      <li class="reveal"><span>3</span><div><h4>Prendé el NDI si lo querés</h4><p>Switch <em>NDI · letras cinéticas</em> y elegí la fuente <strong>Kinetic Lyrics</strong> en tu software.</p></div></li>
+    </ol>
+  </section>
+
+  <!-- ------------------------------------------------------------- DESCARGAR -->
+  <section class="section download" id="descargar">
+    <div class="download-card">
+      <p class="kicker">Última versión</p>
+      <h2>HolyBridge Pro 6.5.6</h2>
+      <p class="section-lead">
+        Lienzo fijo de 1920×1080, letras alineadas en el NDI, tildes y ñ corregidas y
+        renglones de Holyrics respetados.
+      </p>
+      <div class="cta center">
+        <a class="btn big" href="https://github.com/becerrapedro4/holybridgepro-kinetic/releases/latest/download/HolyBridge-Setup.exe">
+          Descargar instalador (.exe)
+        </a>
+        <a class="btn ghost" href="https://github.com/becerrapedro4/holybridgepro-kinetic/releases/latest/download/HolyBridge-portable.zip">
+          Versión portable (.zip)
+        </a>
+      </div>
+      <p class="meta">
+        Windows 10/11 · <a href="https://github.com/becerrapedro4/holybridgepro-kinetic/releases/latest" target="_blank" rel="noopener">todas las versiones</a>
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>
+    <strong>HolyBridge Pro</strong> · letras cinéticas desde Holyrics ·
+    <a href="https://github.com/becerrapedro4/holybridgepro-kinetic" target="_blank" rel="noopener">GitHub</a>
+  </p>
+  <p class="small">OBS, vMix y NDI son marcas de sus respectivos dueños.</p>
+</footer>
+
+<script src="landing.js"></script>
+</body>
+</html>
